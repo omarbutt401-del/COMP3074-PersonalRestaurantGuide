@@ -12,35 +12,31 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.comp3074_personalrestaurantguide.data.SampleData
-import com.example.comp3074_personalrestaurantguide.model.Restaurant
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.comp3074_personalrestaurantguide.data.Restaurant
+import com.example.comp3074_personalrestaurantguide.viewmodel.RestaurantViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEditRestaurantScreen(
     restaurantId: Long?,
     onSaved: () -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    viewModel: RestaurantViewModel = viewModel()
 ) {
-    val existing = restaurantId?.let { id ->
-        SampleData.restaurants.firstOrNull { it.id == id }
-    }
-    val isEdit = existing != null
 
-    var name by remember { mutableStateOf(existing?.name ?: "") }
-    var address by remember { mutableStateOf(existing?.address ?: "") }
-    var phone by remember { mutableStateOf(existing?.phone ?: "") }
-    var description by remember { mutableStateOf(existing?.description ?: "") }
-    var tagsText by remember {
-        mutableStateOf(existing?.tags?.joinToString(", ") ?: "")
-    }
-    var rating by remember { mutableStateOf(existing?.rating ?: 0) }
+    var name by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var tagsText by remember { mutableStateOf("") }
+    var rating by remember { mutableStateOf(0) }
     var nameError by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (isEdit) "Edit Restaurant" else "Add Restaurant") },
+                title = { Text(if (restaurantId != null) "Edit Restaurant" else "Add Restaurant") },
                 navigationIcon = {
                     IconButton(onClick = onCancel) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
@@ -50,43 +46,32 @@ fun AddEditRestaurantScreen(
         }
     ) { padding ->
         Column(
-            Modifier
-                .padding(padding)
-                .padding(16.dp)
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
+            Modifier.padding(padding).padding(16.dp).fillMaxSize().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedTextField(
-                value = name,
-                onValueChange = { name = it; nameError = false },
-                label = { Text("Name *") },
-                isError = nameError,
+                value = name, onValueChange = { name = it; nameError = false },
+                label = { Text("Name *") }, isError = nameError,
                 supportingText = { if (nameError) Text("Name is required") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                singleLine = true, modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
                 value = address, onValueChange = { address = it },
-                label = { Text("Address") }, singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                label = { Text("Address") }, singleLine = true, modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
                 value = phone, onValueChange = { phone = it },
-                label = { Text("Phone") }, singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                label = { Text("Phone") }, singleLine = true, modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
                 value = description, onValueChange = { description = it },
-                label = { Text("Description") }, minLines = 3,
-                modifier = Modifier.fillMaxWidth()
+                label = { Text("Description") }, minLines = 3, modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
                 value = tagsText, onValueChange = { tagsText = it },
                 label = { Text("Tags (comma-separated)") },
                 supportingText = { Text("e.g. Italian, vegetarian, date-night") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                singleLine = true, modifier = Modifier.fillMaxWidth()
             )
 
             Text("Rating", fontWeight = FontWeight.SemiBold)
@@ -94,8 +79,7 @@ fun AddEditRestaurantScreen(
                 repeat(5) { i ->
                     IconButton(onClick = { rating = i + 1 }) {
                         Icon(
-                            Icons.Filled.Star,
-                            contentDescription = "Star ${i + 1}",
+                            Icons.Filled.Star, contentDescription = "Star ${i + 1}",
                             tint = if (i < rating) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.outlineVariant
                         )
@@ -106,32 +90,24 @@ fun AddEditRestaurantScreen(
             }
 
             Spacer(Modifier.height(8.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) {
                     Text("Cancel")
                 }
                 Button(
                     onClick = {
                         if (name.isBlank()) { nameError = true; return@Button }
-                        val tags = tagsText.split(",")
-                            .map { it.trim() }
-                            .filter { it.isNotEmpty() }
                         val r = Restaurant(
-                            id = existing?.id ?: 0L,
+                            id = restaurantId ?: 0L,
                             name = name.trim(),
                             address = address.trim(),
                             phone = phone.trim(),
                             description = description.trim(),
-                            tags = tags,
-                            rating = if (rating == 0) 1 else rating,
-                            latitude = existing?.latitude ?: 0.0,
-                            longitude = existing?.longitude ?: 0.0
+                            tags = tagsText.trim(),
+                            rating = if (rating == 0) 1 else rating
                         )
-                        if (isEdit) SampleData.updateRestaurant(r)
-                        else SampleData.addRestaurant(r)
+                        if (restaurantId != null) viewModel.updateRestaurant(r)
+                        else viewModel.addRestaurant(r)
                         onSaved()
                     },
                     modifier = Modifier.weight(1f)

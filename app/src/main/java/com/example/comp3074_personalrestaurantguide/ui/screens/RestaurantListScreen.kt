@@ -15,23 +15,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.comp3074_personalrestaurantguide.data.SampleData
-import com.example.comp3074_personalrestaurantguide.model.Restaurant
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.comp3074_personalrestaurantguide.data.Restaurant
+import com.example.comp3074_personalrestaurantguide.viewmodel.RestaurantViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RestaurantListScreen(
     onAdd: () -> Unit,
     onOpen: (Long) -> Unit,
-    onAbout: () -> Unit
+    onAbout: () -> Unit,
+    viewModel: RestaurantViewModel = viewModel()
 ) {
-    var query by remember { mutableStateOf("") }
-    val all by remember { mutableStateOf(SampleData.restaurants.toList()) }
-    val filtered = all.filter { r ->
-        query.isBlank() ||
-                r.name.contains(query, ignoreCase = true) ||
-                r.tags.any { it.contains(query, ignoreCase = true) }
-    }
+    val query by viewModel.searchQuery.collectAsState()
+    val restaurants by viewModel.restaurants.collectAsState()
 
     Scaffold(
         topBar = {
@@ -53,7 +50,7 @@ fun RestaurantListScreen(
         Column(Modifier.padding(padding).fillMaxSize()) {
             OutlinedTextField(
                 value = query,
-                onValueChange = { query = it },
+                onValueChange = { viewModel.updateSearchQuery(it) },
                 label = { Text("Search by name or tag") },
                 leadingIcon = { Icon(Icons.Filled.Search, null) },
                 singleLine = true,
@@ -61,7 +58,7 @@ fun RestaurantListScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             )
-            if (filtered.isEmpty()) {
+            if (restaurants.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("No restaurants match your search.")
                 }
@@ -71,7 +68,7 @@ fun RestaurantListScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(filtered, key = { it.id }) { r ->
+                    items(restaurants, key = { it.id }) { r ->
                         RestaurantCard(r, onClick = { onOpen(r.id) })
                     }
                 }
@@ -89,8 +86,7 @@ private fun RestaurantCard(r: Restaurant, onClick: () -> Unit) {
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(Modifier.padding(16.dp)) {
-            Text(r.name, style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold)
+            Text(r.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(4.dp))
             Text(r.address, style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(8.dp))
@@ -105,7 +101,7 @@ private fun RestaurantCard(r: Restaurant, onClick: () -> Unit) {
                     )
                 }
                 Spacer(Modifier.width(12.dp))
-                Text(r.tags.joinToString("  ") { "#$it" },
+                Text(r.tags.split(",").joinToString("  ") { "#${it.trim()}" },
                     style = MaterialTheme.typography.labelMedium)
             }
         }

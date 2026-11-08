@@ -19,7 +19,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.comp3074_personalrestaurantguide.data.SampleData
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.comp3074_personalrestaurantguide.viewmodel.RestaurantViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,15 +28,19 @@ fun DetailsScreen(
     restaurantId: Long,
     onBack: () -> Unit,
     onEdit: (Long) -> Unit,
-    onViewMap: (Long) -> Unit
+    onViewMap: (Long) -> Unit,
+    viewModel: RestaurantViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val r = remember(restaurantId) {
-        SampleData.restaurants.firstOrNull { it.id == restaurantId }
-    }
-    if (r == null) {
+    // Observe the list of restaurants from the database
+    val restaurants by viewModel.restaurants.collectAsState()
+
+    // Find the specific restaurant by ID
+    val restaurant = restaurants.find { it.id == restaurantId }
+
+    if (restaurant == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Restaurant not found.")
+            Text("Restaurant not found or loading...")
         }
         return
     }
@@ -52,16 +57,16 @@ fun DetailsScreen(
                 actions = {
                     IconButton(onClick = {
                         val body = """
-                            ${r.name}
-                            ${r.address}
-                            ${r.phone}
-                            ${r.description}
-                            Rating: ${r.rating}/5
-                            Tags: ${r.tags.joinToString { "#$it" }}
+                            ${restaurant.name}
+                            ${restaurant.address}
+                            ${restaurant.phone}
+                            ${restaurant.description}
+                            Rating: ${restaurant.rating}/5
+                            Tags: ${restaurant.tags.split(",").joinToString { "#${it.trim()}" }}
                         """.trimIndent()
                         val intent = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
-                            putExtra(Intent.EXTRA_SUBJECT, "Restaurant: ${r.name}")
+                            putExtra(Intent.EXTRA_SUBJECT, "Restaurant: ${restaurant.name}")
                             putExtra(Intent.EXTRA_TEXT, body)
                         }
                         context.startActivity(Intent.createChooser(intent, "Share via"))
@@ -80,24 +85,27 @@ fun DetailsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(r.name, style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold)
+            Text(restaurant.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+
             Row(verticalAlignment = Alignment.CenterVertically) {
                 repeat(5) { i ->
                     Icon(Icons.Filled.Star, null,
-                        tint = if (i < r.rating) MaterialTheme.colorScheme.primary
+                        tint = if (i < restaurant.rating) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.outlineVariant,
                         modifier = Modifier.size(20.dp))
                 }
                 Spacer(Modifier.width(8.dp))
-                Text("${r.rating} / 5")
+                Text("${restaurant.rating} / 5")
             }
-            Divider()
-            InfoRow("Address", r.address)
-            InfoRow("Phone", r.phone)
-            InfoRow("Description", r.description)
-            InfoRow("Tags", r.tags.joinToString("  ") { "#$it" })
 
+            Divider()
+
+            InfoRow("Address", restaurant.address)
+            InfoRow("Phone", restaurant.phone)
+            InfoRow("Description", restaurant.description)
+            InfoRow("Tags", restaurant.tags.split(",").joinToString("  ") { "#${it.trim()}" })
+
+            // Map preview placeholder
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -109,39 +117,40 @@ fun DetailsScreen(
                     Icon(Icons.Filled.LocationOn, null, tint = Color.Red)
                     Spacer(Modifier.height(6.dp))
                     Text("Map preview", style = MaterialTheme.typography.labelLarge)
-                    Text("Lat ${r.latitude}, Lng ${r.longitude}",
+                    Text("Lat ${restaurant.latitude}, Lng ${restaurant.longitude}",
                         style = MaterialTheme.typography.labelSmall)
                 }
             }
 
-            Row(Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { onViewMap(r.id) },
-                    modifier = Modifier.weight(1f)) {
+            // Action Buttons
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { onViewMap(restaurant.id) }, modifier = Modifier.weight(1f)) {
                     Text("View Full Map")
                 }
                 OutlinedButton(onClick = {
-                    val uri = Uri.parse("google.navigation:q=${r.latitude},${r.longitude}")
+                    val uri = Uri.parse("google.navigation:q=${restaurant.latitude},${restaurant.longitude}")
                     val i = Intent(Intent.ACTION_VIEW, uri)
                     i.setPackage("com.google.android.apps.maps")
                     runCatching { context.startActivity(i) }
                         .onFailure {
                             context.startActivity(
-                                Intent(Intent.ACTION_VIEW,
-                                    Uri.parse("geo:${r.latitude},${r.longitude}"))
+                                Intent(Intent.ACTION_VIEW, Uri.parse("geo:${restaurant.latitude},${restaurant.longitude}"))
                             )
                         }
                 }, modifier = Modifier.weight(1f)) {
                     Text("Directions")
                 }
             }
-            Row(Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { onEdit(r.id) },
-                    modifier = Modifier.weight(1f)) { Text("Edit") }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { onEdit(restaurant.id) }, modifier = Modifier.weight(1f)) {
+                    Text("Edit")
+                }
                 OutlinedButton(onClick = {
-                    SampleData.deleteRestaurant(r.id); onBack()
-                }, modifier = Modifier.weight(1f)) { Text("Delete") }
+                    viewModel.deleteRestaurant(restaurant)
+                    onBack()
+                }, modifier = Modifier.weight(1f)) {
+                    Text("Delete")
+                }
             }
         }
     }
@@ -150,9 +159,7 @@ fun DetailsScreen(
 @Composable
 private fun InfoRow(label: String, value: String) {
     Column {
-        Text(label, style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold)
-        Text(if (value.isBlank()) "—" else value,
-            style = MaterialTheme.typography.bodyLarge)
+        Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+        Text(if (value.isBlank()) "—" else value, style = MaterialTheme.typography.bodyLarge)
     }
 }
